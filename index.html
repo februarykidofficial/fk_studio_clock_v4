@@ -1,0 +1,2640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Broadcast Clock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for clock and general text -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- New fonts for digital style -->
+    <link href="https://fonts.googleapis.com/css2?family=Digital-7&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bungee&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cutive+Mono&display=swap" rel="stylesheet">
+
+    <style>
+        /* Root variables for theming and scaling */
+        :root {
+            /* Color Scheme - Digital Matrix (Default) */
+            --primary-color: #000000;
+            --secondary-color: #001a00;
+            --accent-color: #00ff00;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --text-color: #ffffff;
+            --glass-bg: rgba(0, 26, 0, 0.4);
+            --text-shadow-color: rgba(0, 255, 0, 1); /* Green glow for digital matrix */
+            --text-shadow-intensity: 70px;
+            --grid-color: rgba(0, 255, 0, 0.05); /* Green grid */
+            --progress-bar-color: var(--accent-color); /* Default progress bar color */
+
+            /* Dynamic colors for pulsing effect */
+            --current-accent-color: var(--accent-color);
+            --current-text-shadow-color: var(--text-shadow-color);
+
+            /* Background Themes */
+            --background-gradient-start: var(--primary-color);
+            --background-gradient-end: var(--secondary-color);
+
+            /* Dynamic Sizing */
+            --layout-scale-factor: 1.0; /* Start with 1.0, user can adjust */
+            --font-scale-factor: 1.0;
+            --date-font-scale-factor: 1.0; /* New variable for date font scaling */
+
+            /* Base sizes in viewport units (vmin for square consistency) */
+            --base-main-panel-size: 90vmin;
+            --base-main-panel-padding: 5vmin;
+
+            /* Base clock circle size as a percentage of its parent (main-panel) */
+            --base-clock-circle-size-percentage: 80%;
+
+            /* Effective sizes that incorporate layout-scale-factor */
+            --effective-main-panel-padding: calc(var(--base-main-panel-padding) * var(--layout-scale-factor));
+            --effective-clock-circle-size: calc(var(--base-clock-circle-size-percentage) * var(--layout-scale-factor));
+
+            /* Base font sizes relative to viewport width */
+            --base-clock-font-size: 6vw;
+            --base-date-font-size: 2vw;
+
+            /* Effective font sizes that incorporate both font-scale-factor and layout-scale-factor */
+            --effective-clock-font-size: calc(var(--base-clock-font-size) * var(--font-scale-factor) * var(--layout-scale-factor));
+            --effective-date-font-size: calc(var(--base-date-font-size) * var(--font-scale-factor) * var(--layout-scale-factor) * var(--date-font-scale-factor));
+
+
+            /* Date position variables */
+            --date-top-position: 20%;
+            --date-left-position: 50%;
+
+            /* ON AIR Indicator Position & Size Variables */
+            --on-air-top-position: 10%;
+            --on-air-left-position: 50%;
+            --on-air-width: auto; /* Default to auto width */
+            --on-air-font-size: calc(1.5vw * var(--font-scale-factor));
+            --on-air-padding-x: 15px;
+            --on-air-padding-y: 5px;
+            --on-air-border-radius: 10px;
+
+
+            /* Font Families */
+            --clock-font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; /* New default font */
+            --date-font-family: 'Inter', sans-serif;
+            --control-font-family: 'Inter', sans-serif;
+        }
+
+        /* Ensure no scrollbars by default and full viewport fill */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            position: relative;
+            box-sizing: border-box;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--control-font-family);
+            background: linear-gradient(135deg, var(--background-gradient-start) 0%, var(--background-gradient-end) 100%);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: default;
+            position: relative;
+            transition: background 0.5s ease-in-out; /* Smooth transition for background changes */
+        }
+
+        /* SVG Glow Filter for minute bar */
+        /* This filter is defined here and referenced by ID in CSS */
+        .glow-filter {
+            filter: drop-shadow(0 0 5px var(--current-accent-color)) drop-shadow(0 0 10px var(--current-accent-color)) drop-shadow(0 0 15px var(--current-accent-color));
+        }
+
+        /* Background decoration */
+        .background-decoration {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .background-decoration::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 20% 50%, rgba(255,255,255,0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 80%, rgba(255,255,255,0.06) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
+            top: -50%;
+            left: -50%;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+
+        /* Main panel style */
+        .main-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border-radius: 50px;
+            /* Main panel size now directly uses base-main-panel-size (vmin) */
+            width: var(--base-main-panel-size);
+            height: var(--base-main-panel-size);
+            max-width: var(--base-main-panel-size);
+            max-height: var(--base-main-panel-size);
+            padding: var(--effective-main-panel-padding); /* Padding scales with layout-scale-factor */
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            transform-origin: center;
+            transition: transform 0.3s ease-in-out;
+            pointer-events: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            /* Removed overflow: hidden; to allow glow effects to extend beyond the panel */
+            aspect-ratio: 1 / 1; /* Explicitly maintain square aspect ratio */
+        }
+
+        /* New style for transparent main panel */
+        .main-panel.transparent-frame {
+            background: transparent;
+            backdrop-filter: none;
+            border: none;
+            box-shadow: none;
+        }
+
+        /* Fullscreen mode specific styles for main-panel */
+        body.fullscreen-mode .main-panel {
+            width: 100vmin; /* Use vmin to ensure it remains square and fits the smaller dimension */
+            height: 100vmin;
+            max-width: 100vmin;
+            max-height: 100vmin;
+            border-radius: 0; /* No rounded corners in fullscreen */
+            padding: 0; /* No padding in fullscreen */
+            position: absolute; /* Use absolute positioning to center it */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* Center it */
+            transition: all 0.5s ease-in-out; /* Smooth transition to fullscreen */
+        }
+
+        /* Subtle grid pattern inside the main panel */
+        .grid-pattern {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                repeating-linear-gradient(0deg, var(--grid-color) 0, var(--grid-color) 1px, transparent 1px, transparent 100px),
+                repeating-linear-gradient(90deg, var(--grid-color) 0, var(--grid-color) 1px, transparent 1px, transparent 100px);
+            background-size: 100px 100px;
+            opacity: 0.5;
+            z-index: -1;
+            transition: opacity 0.3s ease-in-out; /* Smooth transition for grid opacity */
+        }
+
+        .grid-pattern.hidden {
+            opacity: 0;
+        }
+
+        /* Clock specific styles */
+        #clock-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%; /* Take full height of main-panel */
+            width: 100%; /* Take full width of main-panel */
+            position: relative;
+        }
+
+        #clock-circle {
+            position: relative;
+            /* Clock circle size now scales with effective-clock-circle-size */
+            width: var(--effective-clock-circle-size);
+            height: var(--effective-clock-circle-size);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px; /* This padding should probably be relative or scaled too */
+            aspect-ratio: 1 / 1; /* Explicitly maintain circularity */
+        }
+
+        /* Progress Bar Styles */
+        /* Minute Bar Progress Bar */
+        #minute-bar-progress-container {
+            position: absolute;
+            bottom: 40px; /* Moved up and fatter */
+            left: 5%; /* Wider */
+            width: 90%; /* Total width */
+            height: 20px; /* Fatter */
+            z-index: 2;
+            display: none; /* Hidden by default */
+            overflow: hidden; /* Restore overflow: hidden */
+            border-radius: 10px; /* Match rect border-radius */
+            background-color: rgba(255, 255, 255, 0.1); /* Background for the progress bar track */
+            /* Removed filter and animation from container */
+        }
+
+        #minute-bar-progress-rect {
+            fill: var(--current-accent-color); /* Use current-accent-color */
+            stroke: none; /* Remove stroke if it's a filled bar */
+            height: 100%;
+            width: 0%; /* Start at 0% width */
+            transition: width 0.5s linear;
+            border-radius: 10px; /* Rounded corners for the filled bar */
+            /* Removed filter and animation from rect */
+        }
+
+        /* New keyframes for pulsing glow bar */
+        /* Removed @keyframes pulse-glow-bar as it's no longer used for minute bar */
+
+        /* Hour Segment Progress Bar */
+        #hour-segment-progress-container {
+            position: absolute;
+            bottom: 20px;
+            left: 10%;
+            width: 80%;
+            height: 15px;
+            z-index: 2;
+            display: none;
+            overflow: hidden;
+            border-radius: 8px;
+            background-color: rgba(255, 255, 255, 0.1);
+            filter: url(#glowFilter);
+        }
+
+        #hour-segment-progress-rect {
+            fill: var(--current-accent-color); /* Use current-accent-color */
+            stroke: none;
+            height: 100%;
+            width: 0%;
+            transition: width 0.5s linear;
+            border-radius: 8px;
+        }
+
+        #clock-text {
+            font-family: var(--clock-font-family);
+            font-weight: 400;
+            /* Clock text font size now uses effective-clock-font-size */
+            font-size: var(--effective-clock-font-size);
+            color: var(--text-color);
+            text-shadow: 0 0 var(--text-shadow-intensity) var(--current-text-shadow-color); /* Use current-text-shadow-color */
+            letter-spacing: 0.1em;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            flex-grow: 1;
+        }
+
+        #clock-text span {
+            font-variant-numeric: tabular-nums;
+            padding: 0 0.5vw;
+            display: inline-block;
+            text-align: center;
+            min-width: 3vw;
+            transition: text-shadow 0.2s ease-out, color 0.2s ease-out;
+        }
+
+        /* Accent for seconds - subtle pulse effect */
+        #seconds.second-pulse {
+            text-shadow: 0 0 calc(var(--text-shadow-intensity) * 1.8) var(--current-accent-color); /* Use current-accent-color */
+            color: var(--current-accent-color); /* Use current-accent-color */
+            animation: pulse-second 0.5s ease-out;
+        }
+
+        @keyframes pulse-second {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
+        /* Second Hand Styles */
+        /* Base class for all second hand elements for easy hiding */
+        .second-hand-element {
+            display: none; /* Hidden by default, controlled by JS */
+        }
+
+        #second-hand-analog {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 2px;
+            height: 45%; /* Made longer */
+            background-color: var(--current-accent-color); /* Use current-accent-color */
+            transform-origin: bottom center;
+            transform: translateX(-50%) translateY(-100%) rotate(0deg);
+            border-radius: 2px;
+            z-index: 0;
+            filter: drop-shadow(0 0 5px var(--current-accent-color)); /* Use current-accent-color */
+            transition: transform 0.1s linear;
+        }
+
+        #second-hand-analog::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 10px;
+            height: 10px;
+            background-color: var(--text-color);
+            border-radius: 50%;
+            border: 1px solid var(--current-accent-color); /* Use current-accent-color */
+            box-shadow: 0 0 5px var(--text-color);
+        }
+
+        /* Analog Seconds Dots */
+        #analog-seconds-dots {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* Center the container */
+            width: 100%; /* Take full width of clock-circle */
+            height: 100%; /* Take full height of clock-circle */
+            pointer-events: none; /* Allow clicks to pass through */
+            z-index: 1; /* Above analog hand, below text */
+        }
+
+        .analog-second-dot {
+            position: absolute;
+            width: 6px; /* Size of the dot */
+            height: 6px;
+            background-color: var(--current-accent-color); /* Use current-accent-color */
+            border-radius: 50%;
+            box-shadow: 0 0 3px var(--current-accent-color); /* Use current-accent-color */
+            opacity: 0; /* Hidden by default */
+            transition: opacity 0.1s ease-out, transform 0.3s ease-out; /* Smooth transition for appearing/disappearing */
+        }
+
+        .analog-second-dot.visible {
+            opacity: 1;
+        }
+
+        .analog-second-dot.disappearing {
+            opacity: 0;
+            transform: scale(0);
+        }
+
+
+        #bouncing-dot {
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            background-color: var(--current-accent-color); /* Use current-accent-color */
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--current-accent-color), 0 0 20px var(--current-accent-color); /* Use current-accent-color */
+            z-index: 2; /* Above clock text */
+            transform-origin: 50% 50%; /* For rotation around its own center */
+        }
+
+        #pulsing-glow-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 0; /* Behind clock text */
+        }
+
+        #pulsing-glow-text {
+            font-family: var(--clock-font-family);
+            font-weight: 400;
+            /* Pulsing glow text font size now uses effective-clock-font-size */
+            font-size: var(--effective-clock-font-size);
+            color: transparent; /* Text color is transparent, only shadow is visible */
+            text-shadow: 0 0 var(--text-shadow-intensity) var(--current-text-shadow-color); /* Use current-text-shadow-color */
+            letter-spacing: 0.1em;
+            text-align: center;
+            opacity: 0; /* Hidden by default */
+            animation: none; /* Controlled by JS */
+        }
+
+        @keyframes pulse-glow {
+            0% { opacity: 0.5; text-shadow: 0 0 calc(var(--text-shadow-intensity) * 0.5) var(--current-text-shadow-color); }
+            50% { opacity: 1; text-shadow: 0 0 var(--text-shadow-intensity) var(--current-text-shadow-color); }
+            100% { opacity: 0.5; text-shadow: 0 0 calc(var(--text-shadow-intensity) * 0.5) var(--current-text-shadow-color); }
+        }
+
+        /* Bouncing Tail Dot Style */
+        #bouncing-tail-dot-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* Center the container */
+            width: 100%; /* Take full width of clock-circle */
+            height: 100%; /* Take full height of clock-circle */
+            pointer-events: none; /* Allow clicks to pass through */
+        }
+
+        .bouncing-tail-dot-segment {
+            position: absolute;
+            background-color: var(--current-accent-color); /* Use current-accent-color */
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--current-accent-color); /* Use current-accent-color */
+            z-index: 2; /* Above clock text */
+            transition: left 0.1s linear, top 0.1s linear, width 0.1s linear, height 0.1s linear, opacity 0.1s linear;
+        }
+
+        /* Individual dot sizes and opacities (adjusted by JS for tail effect) */
+        .main-dot {
+            width: 15px;
+            height: 15px;
+        }
+
+        .tail-dot-1 {
+            width: 12px;
+            height: 12px;
+            opacity: 0.6;
+        }
+
+        .tail-dot-2 {
+            width: 9px;
+            height: 9px;
+            opacity: 0.4;
+        }
+
+        .tail-dot-3 {
+            width: 6px;
+            height: 6px;
+            opacity: 0.2;
+        }
+
+        /* Comet Second Hand Style */
+        #comet-second-hand {
+            position: absolute;
+            width: 100px; /* Length of the comet */
+            height: 10px; /* Width of the comet */
+            /* Linear gradient for the tail effect, from solid to transparent */
+            background: linear-gradient(to right, var(--current-accent-color) 0%, rgba(var(--current-accent-color), 0.8) 30%, transparent 100%); /* Use current-accent-color */
+            border-radius: 5px; /* Rounded ends for the shape */
+            filter: blur(2px); /* Subtle blur for the tail */
+            box-shadow: 0 0 10px var(--current-accent-color), 0 0 20px rgba(var(--current-accent-color), 0.5); /* Use current-accent-color */
+            z-index: 2;
+            transform-origin: 0% 50%; /* Pivot point is at the "head" of the comet */
+        }
+
+
+        #date-text {
+            font-family: var(--date-font-family);
+            /* Date text font size now uses effective-date-font-size */
+            font-size: var(--effective-date-font-size);
+            color: rgba(255, 255, 255, 0.8);
+            text-shadow: 0 0 calc(var(--text-shadow-intensity) / 3) var(--current-text-shadow-color); /* Use current-text-shadow-color */
+            text-align: center;
+            position: absolute;
+            top: var(--date-top-position); /* Use CSS variable */
+            left: var(--date-left-position); /* Use CSS variable */
+            transform: translateX(-50%); /* Keep horizontal centering relative to left */
+            z-index: 2;
+            white-space: nowrap;
+        }
+
+        /* "ON AIR" Indicator */
+        #on-air-indicator {
+            position: absolute;
+            top: var(--on-air-top-position);
+            left: var(--on-air-left-position);
+            width: var(--on-air-width);
+            transform: translateX(-50%); /* Always center horizontally relative to its left position */
+            background-color: var(--danger-color);
+            color: var(--text-color);
+            padding: var(--on-air-padding-y) var(--on-air-padding-x);
+            border-radius: var(--on-air-border-radius);
+            font-family: var(--control-font-family);
+            font-weight: bold;
+            font-size: var(--on-air-font-size);
+            letter-spacing: 0.1em;
+            text-shadow: 0 0 10px var(--danger-color);
+            box-shadow: 0 0 15px var(--danger-color);
+            display: none;
+            z-index: 3;
+            white-space: nowrap; /* Prevent text wrapping */
+        }
+
+        #on-air-indicator.blinking {
+            animation: blink 1s infinite alternate;
+        }
+
+        @keyframes blink {
+            0% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+
+        /* ON AIR Indicator Styles */
+        #on-air-indicator.style-pill {
+            border-radius: 9999px; /* Fully rounded */
+            padding: var(--on-air-padding-y) calc(var(--on-air-padding-x) * 1.5);
+        }
+
+        #on-air-indicator.style-rectangle {
+            border-radius: 5px; /* Slightly rounded rectangle */
+        }
+
+        #on-air-indicator.style-circle {
+            width: calc(var(--on-air-font-size) * 2.5); /* Make it a circle based on font size */
+            height: calc(var(--on-air-font-size) * 2.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0; /* No padding for circle to control size directly */
+            text-align: center;
+            line-height: 1; /* Adjust line height for vertical centering */
+        }
+        #on-air-indicator.style-circle span {
+            display: block; /* Ensure text is centered within the circle */
+            transform: translateY(10%); /* Fine-tune vertical alignment */
+        }
+
+        #on-air-indicator.style-text-only {
+            background-color: transparent;
+            box-shadow: none;
+            text-shadow: 0 0 10px var(--danger-color);
+            padding: 0;
+            border-radius: 0;
+        }
+
+
+        /* Controls styling */
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 15px 25px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            display: flex; /* Changed to flex for single column layout */
+            flex-direction: column; /* Stack sections vertically */
+            gap: 20px; /* Gap between sections */
+            align-items: center; /* Center items horizontally */
+            color: var(--text-color);
+            font-family: var(--control-font-family);
+            font-size: 0.9rem;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            max-width: 95vw; /* Allow wider controls */
+            max-height: 80vh; /* Max height for scrolling */
+            overflow-y: auto; /* Enable vertical scrolling */
+            pointer-events: auto; /* Ensure pointer events are enabled by default */
+        }
+
+        /* Scrollbar styling for controls */
+        #controls::-webkit-scrollbar {
+            width: 8px;
+            height: 8px; /* For horizontal scrollbar if needed */
+        }
+        #controls::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        #controls::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+        #controls::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+
+        .settings-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px; /* Gap within sections */
+            justify-content: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+        }
+
+        .settings-section:last-child {
+            border-bottom: none;
+        }
+
+        .settings-section-title {
+            width: 100%;
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: var(--accent-color);
+        }
+
+        /* Removed collapsible section styling (details/summary) */
+
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative; /* Establish stacking context for children */
+            z-index: 1; /* Ensure control groups stack above main panel if needed, but below select options */
+        }
+
+        #controls label {
+            white-space: nowrap;
+        }
+
+        #controls input[type="range"],
+        #controls select,
+        #controls input[type="number"],
+        #controls input[type="text"][pattern] { /* Target text inputs with pattern */
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 5px 10px;
+            color: var(--text-color);
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s ease-in-out;
+            position: relative; /* Ensure z-index works */
+            z-index: 20; /* Higher z-index to appear above other elements */
+        }
+
+        #controls select:focus,
+        #controls input[type="range"]:focus,
+        #controls input[type="number"]:focus,
+        #controls input[type="text"][pattern]:focus { /* Target text inputs with pattern */
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 2px rgba(113, 113, 122, 0.5);
+        }
+
+        #controls select {
+            padding-right: 30px;
+            background-image: url('data:image/svg+xml;utf8,<svg fill="%23ffffff" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 16px;
+        }
+
+        #controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+            margin-top: -6px;
+        }
+
+        #controls input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+        }
+
+        #controls input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+
+        #controls input[type="range"]::-moz-range-track {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+
+        /* Slider center pointer */
+        .slider-with-pointer {
+            position: relative;
+        }
+
+        .slider-with-pointer::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%; /* Default center for symmetrical ranges */
+            transform: translate(-50%, -50%);
+            width: 2px;
+            height: 12px; /* Slightly taller than the track */
+            background-color: var(--text-color); /* White line */
+            border-radius: 1px;
+            z-index: 10; /* Above the track, below the thumb */
+            pointer-events: none; /* Don't interfere with slider interaction */
+            opacity: 0.7;
+        }
+
+        /* Specific adjustments for sliders where 50% isn't the default value's visual center */
+        #onAirTopPositionSlider.slider-with-pointer::after { left: calc(10% + 2px); } /* 10% is default for 0-100 range */
+        #onAirLeftPositionSlider.slider-with-pointer::after { left: 50%; } /* 50% is default for 0-100 range */
+        /* Removed #onAirWidthSlider.slider-with-pointer::after rule */
+        #onAirFontSizeSlider.slider-with-pointer::after { left: calc( ((1.5 - 0.5) / (5 - 0.5)) * 100% + 2px); } /* 1.5 is default for 0.5-5 range */
+        #dateFontSizeSlider.slider-with-pointer::after { left: calc( ((1.0 - 0.5) / (2.0 - 0.5)) * 100% + 2px); } /* 1.0 is default for 0.5-2.0 range */
+
+
+        /* Toggle button for on-air indicator */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: var(--danger-color);
+        }
+
+        input:focus + .toggle-slider {
+            box-shadow: 0 0 1px var(--danger-color);
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+
+        /* Settings button styling */
+        #settings-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: transparent; /* Crystal clear */
+            color: white; /* Always white for visibility */
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: none; /* No shadow */
+            transition: transform 0.2s ease-in-out, opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            z-index: 11;
+            text-shadow: 0 0 5px rgba(255,255,255,0.5); /* Subtle white glow for visibility */
+        }
+
+        #settings-button:hover {
+            transform: translateY(-2px);
+            text-shadow: 0 0 10px rgba(255,255,255,0.8); /* Stronger glow on hover */
+        }
+
+        #settings-button:active {
+            transform: translateY(0);
+            text-shadow: 0 0 2px rgba(255,255,255,0.3);
+        }
+
+        /* Fullscreen button styling */
+        #fullscreen-button {
+            position: fixed;
+            bottom: 20px;
+            right: 80px; /* Position next to settings button */
+            background: transparent;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: none;
+            transition: transform 0.2s ease-in-out, opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            z-index: 11;
+            text-shadow: 0 0 5px rgba(255,255,255,0.5);
+        }
+
+        #fullscreen-button:hover {
+            transform: translateY(-2px);
+            text-shadow: 0 0 10px rgba(255,255,255,0.8);
+        }
+
+        #fullscreen-button:active {
+            transform: translateY(0);
+            text-shadow: 0 0 2px rgba(255,255,255,0.3);
+        }
+
+        /* Keep settings and build info visible in fullscreen mode */
+        body.fullscreen-mode #settings-button,
+        body.fullscreen-mode #build-info {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+
+        /* Build Info styling */
+        #build-info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: var(--control-font-family);
+            font-size: 0.8rem;
+            z-index: 10;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+
+        /* Schedule Modal Styling */
+        #schedule-modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+
+        #schedule-modal > div {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            color: var(--text-color);
+        }
+
+        #schedule-list {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .schedule-entry {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .schedule-entry:last-child {
+            border-bottom: none;
+        }
+
+        .schedule-entry .days {
+            font-size: 0.8em;
+            opacity: 0.7;
+        }
+
+        .schedule-entry button {
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 4px 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .schedule-entry button:hover {
+            background-color: #c53030;
+        }
+
+        .schedule-entry .edit-btn {
+            background-color: var(--accent-color);
+            margin-right: 5px;
+        }
+        .schedule-entry .edit-btn:hover {
+            background-color: #0e9f6e;
+        }
+
+        /* NEW RULE: Change edit button text color to black for digital-matrix-white theme */
+        body.digital-matrix-white-theme .schedule-entry .edit-btn {
+            color: black;
+        }
+
+
+        /* Media queries for responsiveness */
+        @media (max-width: 1024px) { /* Adjust for smaller desktops/large tablets */
+            #controls {
+                /* Changed to flex for single column layout */
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-panel {
+                /* Adjust base size for smaller screens */
+                --base-main-panel-size: 95vmin; /* Use vmin for consistency */
+                border-radius: 30px; /* Fixed radius for consistency */
+            }
+
+            #clock-circle {
+                /* Adjust base size for smaller screens */
+                --base-clock-circle-size-percentage: 90%;
+            }
+
+            #clock-text {
+                /* Adjust base font size for smaller screens */
+                --base-clock-font-size: 8vw;
+            }
+
+            #clock-text span {
+                padding: 0 1vw;
+                min-width: 5vw;
+            }
+
+            #date-text {
+                /* Use CSS variables for responsiveness */
+                top: var(--date-top-position);
+                left: var(--date-left-position);
+            }
+
+            #on-air-indicator {
+                font-size: calc(2vw * var(--font-scale-factor));
+            }
+
+            #controls {
+                flex-direction: column; /* Ensure single column on mobile */
+                gap: 10px;
+                padding: 10px 15px;
+                width: auto;
+                bottom: 10px;
+                max-width: 98vw; /* Ensure it fits on smaller screens */
+            }
+
+            .settings-section {
+                gap: 10px;
+                padding: 5px 0;
+            }
+
+            #settings-button {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+                bottom: 10px;
+                right: 10px;
+            }
+
+            #fullscreen-button {
+                width: 40px;
+                height: 40px;
+                font-size: 1.2rem;
+                bottom: 10px;
+                right: 60px; /* Adjust position for smaller screens */
+            }
+
+            #build-info {
+                bottom: 10px;
+                left: 10px;
+                font-size: 0.7rem;
+            }
+
+            #schedule-modal > div {
+                width: 95%;
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .main-panel {
+                --base-main-panel-size: 98vmin;
+                border-radius: 20px;
+            }
+
+            #clock-circle {
+                --base-clock-circle-size-percentage: 95%;
+            }
+
+            #clock-text {
+                --base-clock-font-size: 10vw;
+            }
+
+            #clock-text span {
+                padding: 0 1.5vw;
+                min-width: 7vw;
+            }
+
+            #date-text {
+                /* Use CSS variables for responsiveness */
+                top: var(--date-top-position);
+                left: var(--date-left-position);
+            }
+
+            #on-air-indicator {
+                font-size: calc(2.5vw * var(--font-scale-factor));
+            }
+
+            #controls input[type="range"] {
+                width: 100px;
+            }
+
+            #build-info {
+                bottom: 5px;
+                left: 5px;
+                font-size: 0.6rem;
+            }
+        }
+    </style>
+    <!-- SVG Filter Definition for the neon glow effect -->
+    <svg width="0" height="0" style="position: absolute; z-index: -1;">
+        <defs>
+            <filter id="glowFilter" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur"></feGaussianBlur>
+                <feColorMatrix type="matrix" values="
+                    1 0 0 0 0
+                    0 1 0 0 0
+                    0 0 1 0 0
+                    0 0 0 18 -7
+                " result="coloredBlur"></feColorMatrix>
+                <feMerge>
+                    <feMergeNode in="coloredBlur"></feMergeNode>
+                    <feMergeNode in="SourceGraphic"></feMergeNode>
+                </feMerge>
+            </filter>
+        </defs>
+    </svg>
+</head>
+<body>
+    <div class="background-decoration"></div>
+
+    <div class="main-panel" id="mainPanel">
+        <!-- Subtle grid pattern inside the main panel -->
+        <div class="grid-pattern" id="gridPattern"></div>
+
+        <!-- ON AIR Indicator -->
+        <div id="on-air-indicator"><span>ON AIR</span></div>
+
+        <div id="clock-container">
+            <div id="clock-circle">
+                <div id="clock-text">
+                    <span id="hours">00</span>:
+                    <span id="minutes">00</span>:
+                    <span id="seconds">00</span>
+                </div>
+                <!-- Second Hand (Analog Style) -->
+                <div id="second-hand-analog" class="second-hand-element"></div>
+
+                <!-- Analog Seconds Dots -->
+                <div id="analog-seconds-dots" class="second-hand-element">
+                    <!-- 60 dot elements will be generated here by JS -->
+                </div>
+
+                <!-- Bouncing Dot Second Hand -->
+                <div id="bouncing-dot" class="second-hand-element"></div>
+
+                <!-- Pulsing Glow Second Hand -->
+                <div id="pulsing-glow-container" class="second-hand-element">
+                    <span id="pulsing-glow-text"></span>
+                </div>
+
+                <!-- Bouncing Tail Dot Second Hand -->
+                <div id="bouncing-tail-dot-container" class="second-hand-element">
+                    <div class="bouncing-tail-dot-segment main-dot"></div>
+                    <div class="bouncing-tail-dot-segment tail-dot-1"></div>
+                    <div class="bouncing-tail-dot-segment tail-dot-2"></div>
+                    <div class="bouncing-tail-dot-segment tail-dot-3"></div>
+                </div>
+
+                <!-- Comet Second Hand -->
+                <div id="comet-second-hand" class="second-hand-element"></div>
+            </div>
+        </div>
+        <!-- Date text moved outside clock-circle for independent positioning -->
+        <div id="date-text">January 1, 2024</div>
+
+        <!-- Hour Segment Progress Bar -->
+        <div id="hour-segment-progress-container">
+            <svg id="hour-segment-progress-svg" viewBox="0 0 100 15">
+                <rect id="hour-segment-progress-rect" x="0" y="0" height="15" rx="8" ry="8"></rect>
+            </svg>
+        </div>
+
+        <!-- Minute Bar Progress Bar -->
+        <div id="minute-bar-progress-container">
+            <svg id="minute-bar-progress-svg" viewBox="0 0 100 10">
+                <rect id="minute-bar-progress-rect" x="0" y="0" height="10" rx="5" ry="5"></rect>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Controls for layout and font size -->
+    <div id="controls">
+        <!-- Section: Clock Appearance -->
+        <div class="settings-section">
+            <h3 class="settings-section-title">Clock Appearance</h3>
+            <div class="control-group">
+                <label for="clockFontSelect">Clock Font:</label>
+                <select id="clockFontSelect">
+                    <option value="sf-mono">SF Mono (Retro)</option>
+                    <option value="digital-7">Digital-7</option>
+                    <option value="share-tech-mono">Share Tech Mono</option>
+                    <option value="vt323">VT323</option>
+                    <option value="press-start-2p">Press Start 2P</option>
+                    <option value="monoton">Monoton</option>
+                    <option value="bungee">Bungee</option>
+                    <option value="space-mono">Space Mono</option>
+                    <option value="cutive-mono">Cutive Mono</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="dateFormatSelect">Date Format:</label>
+                <select id="dateFormatSelect">
+                    <option value="short-dmy">DD/MM/YYYY</option>
+                    <option value="full">Weekday, Month Day, Year</option>
+                    <option value="short-mdy">MM/DD/YYYY</option>
+                    <option value="iso">YYYY-MM-DD</option>
+                    <option value="long-date-time">Weekday, Month Day, Year, HH:MM:SS</option>
+                    <option value="short-date-time">MM/DD/YYYY HH:MM</option>
+                    <option value="day-month">Day Month</option>
+                    <option value="day-month-year">Day Month Year</option>
+                    <option value="time-only">Time Only</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="timeZoneSelect">Time Zone:</label>
+                <select id="timeZoneSelect">
+                    <option value="Europe/Warsaw">CET (Warsaw)</option>
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">EST (New York)</option>
+                    <option value="America/Los_Angeles">PST (Los Angeles)</option>
+                    <option value="Europe/London">GMT (London)</option>
+                    <option value="Europe/Berlin">CET (Berlin)</option>
+                    <option value="Asia/Tokyo">JST (Tokyo)</option>
+                    <option value="Australia/Sydney">AEST (Sydney)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Section: Layout & Sizing -->
+        <div class="settings-section">
+            <h3 class="settings-section-title">Layout & Sizing</h3>
+            <div class="control-group">
+                <label for="layoutScaleSlider">Layout Scale:</label>
+                <input type="range" id="layoutScaleSlider" min="0.5" max="1.5" step="0.01" value="1.0" class="slider-with-pointer">
+            </div>
+
+            <div class="control-group">
+                <label for="fontScaleSlider">Font Scale:</label>
+                <input type="range" id="fontScaleSlider" min="0.8" max="1.8" step="0.01" value="1.0" class="slider-with-pointer">
+            </div>
+
+            <div class="control-group">
+                <label for="dateFontSizeSlider">Date Font Scale:</label>
+                <input type="range" id="dateFontSizeSlider" min="0.5" max="2.0" step="0.01" value="1.0" class="slider-with-pointer">
+            </div>
+
+            <div class="control-group">
+                <label for="dateVerticalPositionSlider">Date Vertical Position:</label>
+                <input type="range" id="dateVerticalPositionSlider" min="0" max="100" step="1" value="20" class="slider-with-pointer">
+            </div>
+
+            <div class="control-group">
+                <label for="dateHorizontalPositionSlider">Date Horizontal Position:</label>
+                <input type="range" id="dateHorizontalPositionSlider" min="0" max="100" step="1" value="50" class="slider-with-pointer">
+            </div>
+        </div>
+
+        <!-- Section: Colors & Backgrounds -->
+        <div class="settings-section">
+            <h3 class="settings-section-title">Colors & Backgrounds</h3>
+            <div class="control-group">
+                <label for="overallThemeSelect">Overall Theme:</label>
+                <select id="overallThemeSelect">
+                    <option value="digital-matrix-green">Digital Matrix (Green)</option>
+                    <option value="cyberpunk-night">Cyberpunk Night</option>
+                    <option value="minimalist-white">Minimalist White</option>
+                    <option value="warm-sunset">Warm Sunset</option>
+                    <option value="deep-ocean">Deep Ocean</option>
+                    <option value="digital-matrix-white">Digital Matrix (White)</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="colorSchemeSelect">Color Scheme:</label>
+                <select id="colorSchemeSelect">
+                    <option value="zinc">Zinc (Default)</option>
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                    <option value="red">Red</option>
+                    <option value="purple">Purple</option>
+                    <option value="orange">Orange</option>
+                    <option value="teal">Teal</option>
+                    <option value="pink">Pink</option>
+                    <option value="gold">Gold</option>
+                    <option value="emerald">Emerald</option>
+                    <option value="indigo">Indigo</option>
+                    <option value="sunrise">Sunrise</option>
+                    <option value="twilight">Twilight</option>
+                    <option value="mint">Mint</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="backgroundThemeSelect">Background Theme:</label>
+                <select id="backgroundThemeSelect">
+                    <option value="default">Default Gradient</option>
+                    <option value="nebula">Nebula</option>
+                    <option value="cyberpunk">Cyberpunk</option>
+                    <option value="forest">Forest</option>
+                    <option value="ocean">Ocean Depths</option>
+                    <option value="sunset">Sunset Glow</option>
+                    <option value="starlight">Starlight</option>
+                    <option value="geometric">Geometric</option>
+                    <option value="abstract-waves">Abstract Waves</option>
+                    <option value="digital-matrix-blue">Digital Matrix (Blue)</option>
+                    <option value="digital-matrix-red">Digital Matrix (Red)</option>
+                    <option value="digital-matrix-purple">Digital Matrix (Purple)</option>
+                    <option value="digital-matrix-yellow">Digital Matrix (Yellow)</option>
+                    <option value="digital-matrix-cyan">Digital Matrix (Cyan)</option>
+                    <option value="digital-matrix-orange">Digital Matrix (Orange)</option>
+                    <option value="digital-matrix-lime">Digital Matrix (Lime)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="gridPatternToggle">Enable Grid Pattern:</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="gridPatternToggle" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <div class="control-group">
+                <label for="mainPanelToggle">Enable Clock Frame:</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="mainPanelToggle" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Section: Progress Indicators -->
+        <div class="settings-section">
+            <h3 class="settings-section-title">Progress Indicators</h3>
+            <div class="control-group">
+                <label for="progressBarSelect">Progress Bar:</label>
+                <select id="progressBarSelect">
+                    <option value="none">None</option>
+                    <option value="minute-bar">Minute Bar</option>
+                    <option value="hour-segment">Hour Segment</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Section: Second Hand Styles -->
+        <div class="settings-section">
+            <h3 class="settings-section-title">Second Hand Styles</h3>
+            <div class="control-group">
+                <label for="secondHandStyleSelect">Second Hand Style:</label>
+                <select id="secondHandStyleSelect">
+                    <option value="none">None</option>
+                    <option value="analog-hand">Analog Hand</option>
+                    <option value="bouncing-dot">Bouncing Dot</option>
+                    <option value="pulsing-glow">Pulsing Glow</option>
+                    <option value="bouncing-tail-dot">Bouncing Tail Dot</option>
+                    <option value="comet">Comet</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Section: ON AIR Indicator Settings -->
+        <div class="settings-section">
+            <h3 class="settings-section-title">ON AIR Indicator Settings</h3>
+            <div class="control-group">
+                <label for="onAirTopPositionSlider">Vertical Position:</label>
+                <input type="range" id="onAirTopPositionSlider" min="0" max="100" step="1" value="10" class="slider-with-pointer">
+            </div>
+            <div class="control-group">
+                <label for="onAirLeftPositionSlider">Horizontal Position:</label>
+                <input type="range" id="onAirLeftPositionSlider" min="0" max="100" step="1" value="50" class="slider-with-pointer">
+            </div>
+            <div class="control-group">
+                <label for="onAirWidthSlider">Width (vw):</label>
+                <input type="range" id="onAirWidthSlider" min="5" max="50" step="1" value="auto" class="slider-with-pointer">
+            </div>
+            <div class="control-group">
+                <label for="onAirFontSizeSlider">Font Size (vw):</label>
+                <input type="range" id="onAirFontSizeSlider" min="0.5" max="5" step="0.1" value="1.5" class="slider-with-pointer">
+            </div>
+            <div class="control-group">
+                <label for="onAirStyleSelect">Indicator Style:</label>
+                <select id="onAirStyleSelect">
+                    <option value="pill">Pill</option>
+                    <option value="rectangle">Rectangle</option>
+                    <option value="circle">Circle</option>
+                    <option value="text-only">Text Only</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Section: ON AIR Control -->
+        <div class="settings-section">
+            <h3 class="settings-section-title">ON AIR Control</h3>
+            <div class="control-group flex items-center gap-2">
+                <label for="onAirToggle">ON AIR:</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="onAirToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <button id="openScheduleModal" class="bg-accent-color text-white p-2 rounded-md hover:bg-green-600 transition-colors">ON AIR Schedule</button>
+        </div>
+    </div>
+
+    <!-- Schedule Modal -->
+    <div id="schedule-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-md relative">
+            <button id="close-schedule-modal" class="absolute top-4 right-4 text-white text-2xl">&times;</button>
+            <h2 class="text-2xl font-bold text-white mb-6 text-center">ON AIR Schedule</h2>
+
+            <div class="control-group mb-4">
+                <label for="onAirScheduleToggle">Enable Schedule:</label>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="onAirScheduleToggle" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <div id="schedule-list" class="mb-6 max-h-60 overflow-y-auto pr-2">
+                <!-- Schedule entries will be rendered here by JS -->
+            </div>
+
+            <h3 class="text-xl font-bold text-white mb-4">Add New Event</h3>
+            <div class="flex flex-col gap-4">
+                <div class="flex gap-2 items-center">
+                    <label for="newStartTime" class="text-white">Start:</label>
+                    <!-- Changed type to text and added pattern for 24-hour format, added w-32 for compact size -->
+                    <input type="text" id="newStartTime" placeholder="HH:MM" pattern="^([01]\d|2[0-3]):([0-5]\d)$" class="flex-grow bg-gray-700 text-white p-2 rounded-md w-32">
+                    <label for="newEndTime" class="text-white">End:</label>
+                    <!-- Changed type to text and added pattern for 24-hour format, added w-32 for compact size -->
+                    <input type="text" id="newEndTime" placeholder="HH:MM" pattern="^([01]\d|2[0-3]):([0-5]\d)$" class="flex-grow bg-gray-700 text-white p-2 rounded-md w-32">
+                </div>
+                <div>
+                    <label class="text-white block mb-2">Days:</label>
+                    <div class="flex flex-wrap gap-2 text-white text-sm">
+                        <label><input type="checkbox" class="new-event-day" value="1"> Mon</label>
+                        <label><input type="checkbox" class="new-event-day" value="2"> Tue</label>
+                        <label><input type="checkbox" class="new-event-day" value="3"> Wed</label>
+                        <label><input type="checkbox" class="new-event-day" value="4"> Thu</label>
+                        <label><input type="checkbox" class="new-event-day" value="5"> Fri</label>
+                        <label><input type="checkbox" class="new-event-day" value="6"> Sat</label>
+                        <label><input type="checkbox" class="new-event-day" value="0"> Sun</label>
+                    </div>
+                </div>
+                <button id="addUpdateScheduleEvent" class="bg-accent-color text-white p-3 rounded-md hover:bg-green-600 transition-colors">Add Event</button>
+                <button id="cancelEditScheduleEvent" class="bg-gray-600 text-white p-3 rounded-md hover:bg-gray-700 transition-colors hidden">Cancel Edit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings button -->
+    <button id="settings-button" aria-label="Toggle Settings">⚙️</button>
+
+    <!-- Fullscreen button -->
+    <button id="fullscreen-button" aria-label="Toggle Fullscreen">
+        <svg id="fullscreen-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-maximize">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16h3a2 2 0 0 1 2 2v3"/>
+        </svg>
+    </button>
+
+    <!-- Build Info -->
+    <div id="build-info">build v3.9 (alpha) by FebruaryKid</div>
+
+    <script>
+        // Global or module-level variable for bouncing tail dot history
+        let bouncingTailDotPositions = [];
+        const BOUNCING_TAIL_HISTORY_LENGTH = 4; // Main dot + 3 tail dots
+
+        // Global variable for analog seconds dots
+        let analogSecondDotsElements = [];
+        const ANALOG_DOT_RADIUS_PERCENT = 45; // Distance from center for the dots (percentage of clock-circle radius)
+        const ANALOG_DOT_SIZE_PX = 6; // Size of the dot in pixels
+
+        // Timeout ID for the pulsing effect to clear it if ON AIR is turned off
+        let pulseTimeoutId = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Define color schemes
+            const colorSchemes = {
+                zinc: {
+                    '--primary-color': '#52525b',
+                    '--secondary-color': '#18181b',
+                    '--accent-color': '#71717a',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(8, 6, 7, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                blue: {
+                    '--primary-color': '#1a202c',
+                    '--secondary-color': '#2b6cb0',
+                    '--accent-color': '#4299e1',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(26, 32, 44, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                green: {
+                    '--primary-color': '#102e1c',
+                    '--secondary-color': '#2f855a',
+                    '--accent-color': '#48bb78',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(16, 46, 28, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                red: {
+                    '--primary-color': '#3a0f1f',
+                    '--secondary-color': '#c53030',
+                    '--accent-color': '#e53e3e',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(58, 15, 31, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                purple: {
+                    '--primary-color': '#2a0a3a',
+                    '--secondary-color': '#805ad5',
+                    '--accent-color': '#9f7aea',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(42, 10, 58, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                orange: {
+                    '--primary-color': '#4a2c0a',
+                    '--secondary-color': '#e66c00',
+                    '--accent-color': '#ff9900',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(74, 44, 10, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                teal: {
+                    '--primary-color': '#0a3a3a',
+                    '--secondary-color': '#008080',
+                    '--accent-color': '#00cccc',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(10, 58, 58, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                pink: {
+                    '--primary-color': '#3a0a2a',
+                    '--secondary-color': '#cc0066',
+                    '--accent-color': '#ff3399',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(58, 10, 42, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                gold: {
+                    '--primary-color': '#4a3a0a',
+                    '--secondary-color': '#8b6b00',
+                    '--accent-color': '#ffcc00',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(74, 58, 10, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                emerald: {
+                    '--primary-color': '#0a3a1a',
+                    '--secondary-color': '#008040',
+                    '--accent-color': '#00cc66',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(10, 58, 26, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                indigo: {
+                    '--primary-color': '#1a0a3a',
+                    '--secondary-color': '#4b0082',
+                    '--accent-color': '#8a2be2',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(26, 10, 58, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                sunrise: {
+                    '--primary-color': '#ff7e5f',
+                    '--secondary-color': '#feb47b',
+                    '--accent-color': '#ffc107',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#333333',
+                    '--glass-bg': 'rgba(255, 126, 95, 0.4)',
+                    '--grid-color': 'rgba(0, 0, 0, 0.03)',
+                    '--text-shadow-color': 'rgba(0, 0, 0, 0.5)'
+                },
+                twilight: {
+                    '--primary-color': '#2c3e50',
+                    '--secondary-color': '#34495e',
+                    '--accent-color': '#95a5a6',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ecf0f1',
+                    '--glass-bg': 'rgba(44, 62, 80, 0.4)',
+                    '--grid-color': 'rgba(255, 255, 255, 0.03)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)'
+                },
+                mint: {
+                    '--primary-color': '#a8e063',
+                    '--secondary-color': '#56ab2f',
+                    '--accent-color': '#388e3c',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#333333',
+                    '--glass-bg': 'rgba(168, 224, 99, 0.4)',
+                    '--grid-color': 'rgba(0, 0, 0, 0.03)',
+                    '--text-shadow-color': 'rgba(0, 0, 0, 0.5)'
+                }
+            };
+
+            /* Define background themes */
+            const backgroundThemes = {
+                default: {
+                    '--background-gradient-start': 'var(--primary-color)',
+                    '--background-gradient-end': 'var(--secondary-color)'
+                },
+                nebula: {
+                    '--background-gradient-start': '#0f0c29',
+                    '--background-gradient-end': '#302b63',
+                    '--primary-color': '#0f0c29',
+                    '--secondary-color': '#302b63',
+                    '--accent-color': '#4CAF50',
+                },
+                cyberpunk: {
+                    '--background-gradient-start': '#1a0a2a',
+                    '--background-gradient-end': '#0a1a2a',
+                    '--primary-color': '#1a0a2a',
+                    '--secondary-color': '#0a1a2a',
+                    '--accent-color': '#00ffff',
+                },
+                forest: {
+                    '--background-gradient-start': '#0a2a1a',
+                    '--background-gradient-end': '#1a0a0a',
+                    '--primary-color': '#0a2a1a',
+                    '--secondary-color': '#1a0a0a',
+                    '--accent-color': '#8BC34A',
+                },
+                ocean: {
+                    '--background-gradient-start': '#000428',
+                    '--background-gradient-end': '#004e92',
+                    '--primary-color': '#000428',
+                    '--secondary-color': '#004e92',
+                    '--accent-color': '#42a5f5',
+                },
+                sunset: {
+                    '--background-gradient-start': '#fdc830',
+                    '--background-gradient-end': '#f37335',
+                    '--primary-color': '#fdc830',
+                    '--secondary-color': '#f37335',
+                    '--accent-color': '#ff5722',
+                },
+                starlight: {
+                    '--background-gradient-start': '#000000',
+                    '--background-gradient-end': '#1a1a2e',
+                    '--primary-color': '#000000',
+                    '--secondary-color': '#1a1a2e',
+                    '--accent-color': '#e0e0e0',
+                    '--grid-color': 'rgba(255, 255, 255, 0.05)',
+                },
+                geometric: {
+                    '--background-gradient-start': '#2c3e50',
+                    '--background-gradient-end': '#34495e',
+                    '--primary-color': '#2c3e50',
+                    '--secondary-color': '#34495e',
+                    '--accent-color': '#ecf0f1',
+                    '--grid-color': 'rgba(255, 255, 255, 0.1)',
+                },
+                'abstract-waves': {
+                    '--background-gradient-start': '#0f2027',
+                    '--background-gradient-end': '#203a43',
+                    '--primary-color': '#0f2027',
+                    '--secondary-color': '#203a43',
+                    '--accent-color': '#c4e0e5',
+                    '--grid-color': 'rgba(255, 255, 255, 0.02)',
+                    '--glass-bg': 'rgba(15, 32, 39, 0.4)',
+                },
+                'digital-matrix-blue': {
+                    '--background-gradient-start': '#000000',
+                    '--background-gradient-end': '#00001a',
+                    '--primary-color': '#000000',
+                    '--secondary-color': '#00001a',
+                    '--accent-color': '#0000ff', /* Blue */
+                    '--grid-color': 'rgba(0, 0, 255, 0.05)',
+                    '--glass-bg': 'rgba(0, 0, 26, 0.4)',
+                    '--text-shadow-color': 'rgba(0, 0, 255, 1)'
+                },
+                'digital-matrix-red': {
+                    '--background-gradient-start': '#000000',
+                    '--background-gradient-end': '#1a0000',
+                    '--primary-color': '#000000',
+                    '--secondary-color': '#1a0000',
+                    '--accent-color': '#ff0000', /* Red */
+                    '--grid-color': 'rgba(255, 0, 0, 0.05)',
+                    '--glass-bg': 'rgba(26, 0, 0, 0.4)',
+                    '--text-shadow-color': 'rgba(255, 0, 0, 1)'
+                },
+                'digital-matrix-purple': {
+                    '--background-gradient-start': '#000000',
+                    '--background-gradient-end': '#1a001a',
+                    '--primary-color': '#000000',
+                    '--secondary-color': '#1a001a',
+                    '--accent-color': '#ff00ff', /* Magenta/Purple */
+                    '--grid-color': 'rgba(255, 0, 255, 0.05)',
+                    '--glass-bg': 'rgba(26, 0, 26, 0.4)',
+                    '--text-shadow-color': 'rgba(255, 0, 255, 1)'
+                },
+                'digital-matrix-yellow': {
+                    '--background-gradient-start': '#000000',
+                    '--background-gradient-end': '#1a1a00',
+                    '--primary-color': '#000000',
+                    '--secondary-color': '#1a1a00',
+                    '--accent-color': '#ffff00', /* Yellow */
+                    '--grid-color': 'rgba(255, 255, 0, 0.05)',
+                    '--glass-bg': 'rgba(26, 26, 0, 0.4)',
+                    '--text-shadow-color': 'rgba(255, 255, 0, 1)'
+                },
+                'digital-matrix-cyan': {
+                    '--background-gradient-start': '#000000',
+                    '--background-gradient-end': '#001a1a',
+                    '--primary-color': '#000000',
+                    '--secondary-color': '#001a1a',
+                    '--accent-color': '#00ffff', /* Cyan */
+                    '--grid-color': 'rgba(0, 255, 255, 0.05)',
+                    '--glass-bg': 'rgba(0, 26, 26, 0.4)',
+                    '--text-shadow-color': 'rgba(0, 255, 255, 1)'
+                },
+                'digital-matrix-orange': {
+                    '--background-gradient-start': '#000000',
+                    '--background-gradient-end': '#1a0d00',
+                    '--primary-color': '#000000',
+                    '--secondary-color': '#1a0d00',
+                    '--accent-color': '#ff8c00', /* Darker Orange */
+                    '--grid-color': 'rgba(255, 140, 0, 0.05)',
+                    '--glass-bg': 'rgba(26, 13, 0, 0.4)',
+                    '--text-shadow-color': 'rgba(255, 140, 0, 1)'
+                },
+                'digital-matrix-lime': {
+                    '--background-gradient-start': '#000000',
+                    '--background-gradient-end': '#0f1a00',
+                    '--primary-color': '#000000',
+                    '--secondary-color': '#0f1a00',
+                    '--accent-color': '#76ff03', /* Lime */
+                    '--grid-color': 'rgba(118, 255, 3, 0.05)',
+                    '--glass-bg': 'rgba(15, 26, 0, 0.4)',
+                    '--text-shadow-color': 'rgba(118, 255, 3, 1)'
+                }
+            };
+
+            /* Define overall themes */
+            const overallThemes = {
+                'digital-matrix-green': {
+                    '--primary-color': '#000000',
+                    '--secondary-color': '#001a00',
+                    '--accent-color': '#00ff00',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#ffffff',
+                    '--glass-bg': 'rgba(0, 26, 0, 0.4)',
+                    '--text-shadow-color': 'rgba(0, 255, 0, 1)',
+                    '--grid-color': 'rgba(0, 255, 0, 0.05)',
+                    '--background-gradient-start': '#000000',
+                    '--background-gradient-end': '#001a00',
+                    '--clock-font-family': "'SF Mono', Monaco, 'Cascadia Code', monospace",
+                    'body-class': ''
+                },
+                'cyberpunk-night': {
+                    '--primary-color': '#0a0a1a',
+                    '--secondary-color': '#1a0a2a',
+                    '--accent-color': '#00ffff', /* Cyan */
+                    '--warning-color': '#ffcc00',
+                    '--danger-color': '#ff0066', /* Pink */
+                    '--text-color': '#e0e0e0',
+                    '--glass-bg': 'rgba(26, 10, 42, 0.6)',
+                    '--text-shadow-color': 'rgba(0, 255, 255, 0.8)',
+                    '--grid-color': 'rgba(0, 255, 255, 0.1)',
+                    '--background-gradient-start': '#0a0a1a',
+                    '--background-gradient-end': '#1a0a2a',
+                    '--clock-font-family': "'Bungee', cursive",
+                    'body-class': ''
+                },
+                'minimalist-white': {
+                    '--primary-color': '#f0f0f0',
+                    '--secondary-color': '#e0e0e0',
+                    '--accent-color': '#333333',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#333333',
+                    '--glass-bg': 'rgba(255, 255, 255, 0.7)',
+                    '--text-shadow-color': 'rgba(0, 0, 0, 0.1)',
+                    '--grid-color': 'rgba(0, 0, 0, 0.02)',
+                    '--background-gradient-start': '#f0f0f0',
+                    '--background-gradient-end': '#e0e0e0',
+                    '--clock-font-family': "'Inter', sans-serif",
+                    'body-class': ''
+                },
+                'warm-sunset': {
+                    '--primary-color': '#ff7e5f',
+                    '--secondary-color': '#feb47b',
+                    '--accent-color': '#ff5722',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#333333',
+                    '--glass-bg': 'rgba(255, 126, 95, 0.4)',
+                    '--text-shadow-color': 'rgba(0, 0, 0, 0.5)',
+                    '--grid-color': 'rgba(0, 0, 0, 0.03)',
+                    '--background-gradient-start': '#fdc830',
+                    '--background-gradient-end': '#f37335',
+                    '--clock-font-family': "'Monoton', cursive",
+                    'body-class': ''
+                },
+                'deep-ocean': {
+                    '--primary-color': '#000428',
+                    '--secondary-color': '#004e92',
+                    '--accent-color': '#42a5f5',
+                    '--warning-color': '#f59e0b',
+                    '--danger-color': '#ef4444',
+                    '--text-color': '#e0f2f7',
+                    '--glass-bg': 'rgba(0, 78, 146, 0.4)',
+                    '--text-shadow-color': 'rgba(66, 165, 245, 0.8)',
+                    '--grid-color': 'rgba(66, 165, 245, 0.05)',
+                    '--background-gradient-start': '#000428',
+                    '--background-gradient-end': '#004e92',
+                    '--clock-font-family': "'Space Mono', monospace",
+                    'body-class': ''
+                },
+                'digital-matrix-white': { // This one needs the special class for the edit button
+                    '--background-gradient-start': '#000000',
+                    '--background-gradient-end': '#1a1a1a',
+                    '--primary-color': '#000000',
+                    '--secondary-color': '#1a1a1a',
+                    '--accent-color': '#ffffff', /* White */
+                    '--grid-color': 'rgba(255, 255, 255, 0.05)',
+                    '--glass-bg': 'rgba(26, 26, 26, 0.4)',
+                    '--text-shadow-color': 'rgba(255, 255, 255, 1)',
+                    '--text-color': '#ffffff',
+                    '--clock-font-family': "'SF Mono', Monaco, 'Cascadia Code', monospace",
+                    'body-class': 'digital-matrix-white-theme' // Special class for this theme
+                }
+            };
+
+            /* Define font families */
+            const fontFamilies = {
+                'sf-mono': "'SF Mono', Monaco, 'Cascadia Code', monospace",
+                'digital-7': "'Digital-7', sans-serif",
+                'share-tech-mono': "'Share Tech Mono', monospace",
+                'vt323': "'VT323', monospace",
+                'press-start-2p': "'Press Start 2P', cursive",
+                'monoton': "'Monoton', cursive",
+                'bungee': "'Bungee', cursive",
+                'space-mono': "'Space Mono', monospace",
+                'cutive-mono': "'Cutive Mono', monospace"
+            };
+
+            /* Define date formatters */
+            const dateFormatters = {
+                'full': (date, tz) => new Intl.DateTimeFormat('en-US', {
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: tz
+                }).format(date),
+                'short-mdy': (date, tz) => new Intl.DateTimeFormat('en-US', {
+                    month: '2-digit', day: '2-digit', year: 'numeric', timeZone: tz
+                }).format(date),
+                'short-dmy': (date, tz) => new Intl.DateTimeFormat('en-GB', {
+                    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: tz
+                }).format(date),
+                'iso': (date, tz) => new Intl.DateTimeFormat('en-CA', {
+                    year: 'numeric', month: '2-digit', day: '2-digit', timeZone: tz
+                }).format(date),
+                'long-date-time': (date, tz) => new Intl.DateTimeFormat('en-US', {
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: tz
+                }).format(date),
+                'short-date-time': (date, tz) => new Intl.DateTimeFormat('en-US', {
+                    month: '2-digit', day: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz
+                }).format(date),
+                'day-month': (date, tz) => new Intl.DateTimeFormat('en-US', {
+                    day: 'numeric', month: 'long', timeZone: tz
+                }).format(date),
+                'day-month-year': (date, tz) => new Intl.DateTimeFormat('en-US', {
+                    day: 'numeric', month: 'long', year: 'numeric', timeZone: tz
+                }).format(date),
+                'time-only': (date, tz) => new Intl.DateTimeFormat('en-US', {
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: tz
+                }).format(date)
+            };
+
+            /* Get references to elements */
+            const root = document.documentElement;
+            const layoutScaleSlider = document.getElementById('layoutScaleSlider');
+            const fontScaleSlider = document.getElementById('fontScaleSlider');
+            const controlsDiv = document.getElementById('controls');
+            const settingsButton = document.getElementById('settings-button');
+            const fullscreenButton = document.getElementById('fullscreen-button'); /* New fullscreen button */
+            const fullscreenIcon = document.getElementById('fullscreen-icon'); /* SVG icon inside the fullscreen button */
+            const buildInfo = document.getElementById('build-info'); /* Build info element */
+            const colorSchemeSelect = document.getElementById('colorSchemeSelect');
+            const backgroundThemeSelect = document.getElementById('backgroundThemeSelect');
+            const overallThemeSelect = document.getElementById('overallThemeSelect'); // New overall theme selector
+            const clockFontSelect = document.getElementById('clockFontSelect');
+            const dateFormatSelect = document.getElementById('dateFormatSelect');
+            const timeZoneSelect = document.getElementById('timeZoneSelect');
+            const onAirToggle = document.getElementById('onAirToggle');
+            const onAirIndicator = document.getElementById('on-air-indicator');
+            const secondsSpan = document.getElementById('seconds'); /* Get seconds span for pulse effect */
+            const dateTextElement = document.getElementById('date-text'); /* Get date text element */
+            const gridPattern = document.getElementById('gridPattern'); /* Get grid pattern element */
+            const gridPatternToggle = document.getElementById('gridPatternToggle'); /* Get grid pattern toggle */
+            const mainPanel = document.getElementById('mainPanel'); /* Get main panel element */
+            const mainPanelToggle = document.getElementById('mainPanelToggle'); /* Get main panel toggle */
+
+            /* Date position sliders */
+            const dateVerticalPositionSlider = document.getElementById('dateVerticalPositionSlider');
+            const dateHorizontalPositionSlider = document.getElementById('dateHorizontalPositionSlider');
+            const dateFontSizeSlider = document.getElementById('dateFontSizeSlider'); /* New date font size slider */
+
+            /* ON AIR Indicator Position & Size Sliders */
+            const onAirTopPositionSlider = document.getElementById('onAirTopPositionSlider');
+            const onAirLeftPositionSlider = document.getElementById('onAirLeftPositionSlider');
+            const onAirWidthSlider = document.getElementById('onAirWidthSlider');
+            const onAirFontSizeSlider = document.getElementById('onAirFontSizeSlider');
+            const onAirStyleSelect = document.getElementById('onAirStyleSelect');
+
+
+            /* Progress bar elements */
+            const progressBarSelect = document.getElementById('progressBarSelect');
+            const minuteBarProgressContainer = document.getElementById('minute-bar-progress-container');
+            const minuteBarProgressRect = document.getElementById('minute-bar-progress-rect');
+            const hourSegmentProgressContainer = document.getElementById('hour-segment-progress-container');
+            const hourSegmentProgressRect = document.getElementById('hour-segment-progress-rect');
+
+            /* Second hand style elements */
+            const secondHandStyleSelect = document.getElementById('secondHandStyleSelect');
+            const secondHandAnalog = document.getElementById('second-hand-analog');
+            const analogSecondsDotsContainer = document.getElementById('analog-seconds-dots'); /* Container for analog dots */
+            const bouncingDot = document.getElementById('bouncing-dot');
+            const pulsingGlowContainer = document.getElementById('pulsing-glow-container');
+            const pulsingGlowText = document.getElementById('pulsing-glow-text');
+            const bouncingTailDotContainer = document.getElementById('bouncing-tail-dot-container');
+            const cometSecondHand = document.getElementById('comet-second-hand');
+
+
+            /* Schedule modal elements */
+            const scheduleModal = document.getElementById('schedule-modal');
+            const openScheduleModalBtn = document.getElementById('openScheduleModal');
+            const closeScheduleModalBtn = document.getElementById('close-schedule-modal');
+            const onAirScheduleToggle = document.getElementById('onAirScheduleToggle');
+            const scheduleList = document.getElementById('schedule-list');
+            const newStartTimeInput = document.getElementById('newStartTime');
+            const newEndTimeInput = document.getElementById('newEndTime');
+            const newEventDayCheckboxes = document.querySelectorAll('.new-event-day');
+            const addUpdateScheduleEventBtn = document.getElementById('addUpdateScheduleEvent');
+            const cancelEditScheduleEventBtn = document.getElementById('cancelEditScheduleEvent');
+
+            /* Global variable to track if we are editing an event */
+            let editingScheduleIndex = null;
+
+            /* Initial schedule with default events */
+            /* Days: 0 = Sunday, 1 = Monday, ..., 6 = Saturday */
+            let onAirSchedule = [
+                { startTime: '07:50', endTime: '08:55', days: [1, 2, 3, 4, 5] }, /* Mon-Fri, changed end time */
+                { startTime: '09:07', endTime: '10:35', days: [1, 2, 3, 4, 5] }, /* New event for Mon-Fri */
+                { startTime: '21:00', endTime: '22:30', days: [1] },  /* Monday only */
+                { startTime: '20:00', endTime: '21:30', days: [4] }   /* Thursday only */
+            ];
+
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+            /* Initialize analog dots (pre-create 60 elements) */
+            for (let i = 0; i < 60; i++) {
+                const dot = document.createElement('div');
+                dot.classList.add('analog-second-dot');
+                /* Calculate static position for each dot */
+                /* Angle for each second, starting from top (0 degrees at 12 o'clock) */
+                const angleRad = (i / 60) * 2 * Math.PI - Math.PI / 2;
+                const x = 50 + ANALOG_DOT_RADIUS_PERCENT * Math.cos(angleRad); /* Percentage X */
+                const y = 50 + ANALOG_DOT_RADIUS_PERCENT * Math.sin(angleRad); /* Percentage Y */
+
+                dot.style.left = `calc(${x}% - ${ANALOG_DOT_SIZE_PX / 2}px)`;
+                dot.style.top = `calc(${y}% - ${ANALOG_DOT_SIZE_PX / 2}px)`;
+                analogSecondsDotsContainer.appendChild(dot);
+                analogSecondDotsElements.push(dot);
+            }
+
+
+            function renderSchedule() {
+                scheduleList.innerHTML = ''; /* Clear existing list */
+                if (onAirSchedule.length === 0) {
+                    scheduleList.innerHTML = '<p class="text-center text-gray-400">No scheduled events.</p>';
+                    return;
+                }
+                onAirSchedule.forEach((event, index) => {
+                    const entryDiv = document.createElement('div');
+                    entryDiv.classList.add('schedule-entry');
+
+                    const daysText = event.days.length === 7 ? 'Every Day' :
+                                     event.days.length === 5 && event.days.every(d => d >= 1 && d <= 5) ? 'Weekdays' :
+                                     event.days.map(day => dayNames[day]).join(', ');
+
+                    entryDiv.innerHTML = `
+                        <div>
+                            <p class="text-lg">${event.startTime} - ${event.endTime}</p>
+                            <p class="days">${daysText}</p>
+                        </div>
+                        <div>
+                            <button class="edit-btn" data-index="${index}">Edit</button>
+                            <button data-index="${index}">Delete</button>
+                        </div>
+                    `;
+                    scheduleList.appendChild(entryDiv);
+                });
+
+                /* Add event listeners to delete buttons */
+                scheduleList.querySelectorAll('.schedule-entry button:last-child').forEach(button => {
+                    button.addEventListener('click', (event) => {
+                        const indexToDelete = parseInt(event.target.dataset.index);
+                        onAirSchedule.splice(indexToDelete, 1);
+                        renderSchedule();
+                        updateClock(); /* Re-evaluate ON AIR status */
+                    });
+                });
+
+                /* Add event listeners to edit buttons */
+                scheduleList.querySelectorAll('.schedule-entry .edit-btn').forEach(button => {
+                    button.addEventListener('click', (event) => {
+                        editingScheduleIndex = parseInt(event.target.dataset.index);
+                        const eventToEdit = onAirSchedule[editingScheduleIndex];
+
+                        newStartTimeInput.value = eventToEdit.startTime;
+                        newEndTimeInput.value = eventToEdit.endTime;
+                        newEventDayCheckboxes.forEach(checkbox => {
+                            checkbox.checked = eventToEdit.days.includes(parseInt(checkbox.value));
+                        });
+
+                        addUpdateScheduleEventBtn.textContent = 'Update Event';
+                        cancelEditScheduleEventBtn.classList.remove('hidden');
+                    });
+                });
+            }
+
+            function clearNewEventForm() {
+                newStartTimeInput.value = '';
+                newEndTimeInput.value = '';
+                newEventDayCheckboxes.forEach(checkbox => checkbox.checked = false);
+                addUpdateScheduleEventBtn.textContent = 'Add Event';
+                cancelEditScheduleEventBtn.classList.add('hidden');
+                editingScheduleIndex = null;
+            }
+
+            function addUpdateScheduleEntry() {
+                const newStartTime = newStartTimeInput.value;
+                const newEndTime = newEndTimeInput.value;
+                const newDays = Array.from(newEventDayCheckboxes)
+                                    .filter(checkbox => checkbox.checked)
+                                    .map(checkbox => parseInt(checkbox.value));
+
+                /* Basic validation for 24-hour format */
+                const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
+                if (!timePattern.test(newStartTime) || !timePattern.test(newEndTime)) {
+                    console.warn('Please enter times in HH:MM (24-hour) format.');
+                    /* Optionally, provide user feedback in the UI */
+                    return;
+                }
+
+                if (newStartTime && newEndTime && newDays.length > 0) {
+                    if (editingScheduleIndex !== null) {
+                        /* Update existing event */
+                        onAirSchedule[editingScheduleIndex] = { startTime: newStartTime, endTime: newEndTime, days: newDays };
+                    } else {
+                        /* Add new event */
+                        onAirSchedule.push({ startTime: newStartTime, endTime: newEndTime, days: newDays });
+                    }
+                    renderSchedule();
+                    updateClock(); /* Re-evaluate ON AIR status */
+                    clearNewEventForm(); /* Clear inputs and reset button */
+                } else {
+                    console.warn('Please fill in all fields for the schedule event.');
+                }
+            }
+
+            function updateClock() {
+                const selectedTimeZone = timeZoneSelect.value;
+                const now = new Date();
+
+                /* Time formatting */
+                const timeOptions = {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false,
+                    timeZone: selectedTimeZone
+                };
+                const timeFormatter = new Intl.DateTimeFormat('en-US', timeOptions);
+                const parts = timeFormatter.formatToParts(now);
+
+                let hours = parts.find(p => p.type === 'hour').value;
+                let minutes = parts.find(p => p.type === 'minute').value;
+                let seconds = parts.find(p => p.type === 'second').value;
+
+                document.getElementById('hours').textContent = hours;
+                document.getElementById('minutes').textContent = minutes;
+
+                /* Handle seconds span for pulse effect */
+                if (secondsSpan.textContent !== seconds) {
+                    secondsSpan.classList.remove('second-pulse');
+                    void secondsSpan.offsetWidth; /* Trigger reflow to restart animation */
+                    secondsSpan.classList.add('second-pulse'); /* Keep pulse for general update */
+                }
+                secondsSpan.textContent = seconds;
+
+
+                /* Date formatting */
+                const selectedDateFormat = dateFormatSelect.value;
+                const dateString = dateFormatters[selectedDateFormat](now, selectedTimeZone);
+                document.getElementById('date-text').textContent = dateString;
+
+                /* ON AIR indicator logic */
+                const currentLocalTime = new Date(now.toLocaleString('en-US', { timeZone: selectedTimeZone }));
+                const currentHour = currentLocalTime.getHours();
+                const currentMinute = currentLocalTime.getMinutes();
+                const currentSecond = currentLocalTime.getSeconds(); /* Get seconds for bouncing dot */
+                const currentDay = currentLocalTime.getDay();
+
+                let isScheduledOnAir = false;
+                if (onAirScheduleToggle.checked) {
+                    for (const event of onAirSchedule) {
+                        const [startHour, startMinute] = event.startTime.split(':').map(Number);
+                        const [endHour, endMinute] = event.endTime.split(':').map(Number);
+
+                        const currentTimeInMinutes = currentHour * 60 + currentMinute;
+                        const startTimeInMinutes = startHour * 60 + startMinute;
+                        const endTimeInMinutes = endHour * 60 + endMinute;
+
+                        let isTimeMatch = false;
+                        if (startTimeInMinutes <= endTimeInMinutes) {
+                            isTimeMatch = currentTimeInMinutes >= startTimeInMinutes && currentTimeInMinutes < endTimeInMinutes;
+                        } else {
+                            isTimeMatch = currentTimeInMinutes >= startTimeInMinutes || currentTimeInMinutes < endTimeInMinutes;
+                        }
+
+                        const isDayMatch = event.days.includes(currentDay);
+
+                        if (isTimeMatch && isDayMatch) {
+                            isScheduledOnAir = true;
+                            break;
+                        }
+                    }
+                }
+
+                const isOnAir = onAirToggle.checked || isScheduledOnAir;
+
+                // Store current accent and text shadow colors before potential pulse override
+                const originalAccentColor = root.style.getPropertyValue('--accent-color');
+                const originalTextShadowColor = root.style.getPropertyValue('--text-shadow-color');
+
+
+                if (isOnAir) {
+                    onAirIndicator.style.display = 'block';
+                    onAirIndicator.classList.add('blinking');
+
+                    // Determine pulse colors based on current background theme
+                    let pulseAccentColor;
+                    let pulseTextShadowColor;
+
+                    // Use the accent and text shadow colors from the digital-matrix-red overall theme for pulsing
+                    pulseAccentColor = overallThemes['digital-matrix-red']['--accent-color'];
+                    pulseTextShadowColor = overallThemes['digital-matrix-red']['--text-shadow-color'];
+                    
+                    // If the current overall theme is digital-matrix-red, pulse to digital-matrix-white
+                    if (overallThemeSelect.value === 'digital-matrix-red') {
+                        pulseAccentColor = overallThemes['digital-matrix-white']['--accent-color'];
+                        pulseTextShadowColor = overallThemes['digital-matrix-white']['--text-shadow-color'];
+                    }
+
+
+                    // Apply pulsing effect to clock elements
+                    root.style.setProperty('--current-accent-color', pulseAccentColor);
+                    root.style.setProperty('--current-text-shadow-color', pulseTextShadowColor);
+
+                    // Clear any existing timeout to prevent multiple pulses
+                    if (pulseTimeoutId) {
+                        clearTimeout(pulseTimeoutId);
+                    }
+                    // Revert colors after 500ms
+                    pulseTimeoutId = setTimeout(() => {
+                        root.style.setProperty('--current-accent-color', originalAccentColor);
+                        root.style.setProperty('--current-text-shadow-color', originalTextShadowColor);
+                    }, 500);
+
+                } else {
+                    onAirIndicator.style.display = 'none';
+                    onAirIndicator.classList.remove('blinking');
+                    // Ensure colors are reset to default if ON AIR is off or pulse has ended
+                    root.style.setProperty('--current-accent-color', originalAccentColor);
+                    root.style.setProperty('--current-text-shadow-color', originalTextShadowColor);
+                    if (pulseTimeoutId) {
+                        clearTimeout(pulseTimeoutId);
+                        pulseTimeoutId = null;
+                    }
+                }
+
+                /* Update Progress Bars */
+                const selectedProgressBar = progressBarSelect.value;
+                const hourSegmentWidth = 100; /* SVG viewBox width is 100 */
+                const minuteBarWidth = 100; /* SVG viewBox width is 100 (for rect width calculation) */
+
+                /* Hide all progress bars */
+                minuteBarProgressContainer.style.display = 'none';
+                hourSegmentProgressContainer.style.display = 'none';
+
+                if (selectedProgressBar === 'minute-bar') {
+                    minuteBarProgressContainer.style.display = 'block';
+                    const totalSecondsInMinute = parseInt(seconds);
+                    const minuteProgressPercentage = (totalSecondsInMinute / 60);
+                    const filledLength = minuteBarWidth * minuteProgressPercentage;
+                    minuteBarProgressRect.style.width = `${filledLength}%`;
+                } else if (selectedProgressBar === 'hour-segment') {
+                    hourSegmentProgressContainer.style.display = 'block';
+                    const totalMinutesInHour = currentMinute + (parseInt(seconds) / 60);
+                    const hourProgressPercentage = (totalMinutesInHour / 60);
+                    const filledLength = hourSegmentWidth * hourProgressPercentage;
+                    hourSegmentProgressRect.style.width = `${filledLength}%`;
+                }
+
+
+                /* Update Second Hand Styles (single selection) */
+                const selectedSecondHandStyle = secondHandStyleSelect.value;
+                
+                /* First, hide/reset all second hand elements */
+                document.querySelectorAll('.second-hand-element').forEach(el => el.style.display = 'none');
+                pulsingGlowText.style.animation = 'none'; /* Reset animation */
+                secondsSpan.classList.remove('flicker-active'); /* Ensure flicker is removed if not selected */
+
+                /* Reset bouncing tail dot history when style changes */
+                if (selectedSecondHandStyle !== 'bouncing-tail-dot') {
+                    bouncingTailDotPositions = [];
+                }
+
+                /* Reset analog seconds dots when style changes */
+                if (selectedSecondHandStyle !== 'analog-hand') {
+                    analogSecondDotsElements.forEach(dot => {
+                        dot.classList.remove('visible', 'disappearing'); /* Reset classes */
+                        dot.style.opacity = '0'; /* Ensure opacity is reset for next cycle */
+                        dot.style.transform = 'scale(1)'; /* Ensure scale is reset */
+                    });
+                }
+
+
+                if (selectedSecondHandStyle === 'analog-hand') {
+                    secondHandAnalog.style.display = 'block';
+                    const secondAngle = (parseInt(seconds) / 60) * 360;
+                    secondHandAnalog.style.transform = `translateX(-50%) translateY(-100%) rotate(${secondAngle}deg)`;
+
+                    analogSecondsDotsContainer.style.display = 'block';
+
+                    /* Make the current second's dot visible */
+                    const currentSecondInt = parseInt(seconds);
+                    if (analogSecondDotsElements[currentSecondInt]) {
+                        /* Only add 'visible' if it's not already there to avoid re-triggering transition */
+                        if (!analogSecondDotsElements[currentSecondInt].classList.contains('visible')) {
+                            analogSecondDotsElements[currentSecondInt].classList.add('visible');
+                        }
+                    }
+
+                    /* Disappearance animation for dots when seconds reset */
+                    if (currentSecondInt === 0) {
+                        /* Trigger disappearance for all dots from the previous cycle */
+                        analogSecondDotsElements.forEach(dot => {
+                            if (dot.classList.contains('visible')) {
+                                dot.classList.add('disappearing');
+                                dot.classList.remove('visible'); /* Remove visible class immediately */
+                                /* Remove disappearing class after animation to reset for next cycle */
+                                dot.addEventListener('transitionend', function handler() {
+                                    dot.classList.remove('disappearing');
+                                    dot.removeEventListener('transitionend', handler);
+                                }, { once: true });
+                            }
+                        });
+                    }
+                } else if (selectedSecondHandStyle === 'bouncing-dot') {
+                    bouncingDot.style.display = 'block';
+                    const radius = 45;
+                    const centerX = 50;
+                    const centerY = 50;
+                    const angleRad = (parseInt(seconds) / 60) * 2 * Math.PI;
+                    const x = centerX + radius * Math.sin(angleRad);
+                    const y = centerY - radius * Math.cos(angleRad);
+                    bouncingDot.style.left = `calc(${x}% - 7.5px)`;
+                    bouncingDot.style.top = `calc(${y}% - 7.5px)`;
+                } else if (selectedSecondHandStyle === 'pulsing-glow') {
+                    pulsingGlowContainer.style.display = 'flex';
+                    pulsingGlowText.textContent = `${hours}:${minutes}:${seconds}`;
+                    pulsingGlowText.style.animation = 'pulse-glow 1s infinite alternate';
+                } else if (selectedSecondHandStyle === 'bouncing-tail-dot') {
+                    bouncingTailDotContainer.style.display = 'block';
+                    const radius = 45;
+                    const centerX = 50;
+                    const centerY = 50;
+                    const angleRad = (parseInt(seconds) / 60) * 2 * Math.PI;
+
+                    /* Current main dot position */
+                    const currentMainX = centerX + radius * Math.sin(angleRad);
+                    const currentMainY = centerY - radius * Math.cos(angleRad);
+
+                    /* Add current position to history only if it's different from the last recorded position */
+                    /* This prevents adding duplicate positions if the clock updates faster than seconds change */
+                    const lastPos = bouncingTailDotPositions[0];
+                    if (!lastPos || lastPos.x !== currentMainX || lastPos.y !== currentMainY) {
+                        bouncingTailDotPositions.unshift({ x: currentMainX, y: currentMainY }); /* Add to front */
+                        if (bouncingTailDotPositions.length > BOUNCING_TAIL_HISTORY_LENGTH) {
+                            bouncingTailDotPositions.pop(); /* Remove oldest if history too long */
+                        }
+                    }
+
+                    const dotElements = document.querySelectorAll('#bouncing-tail-dot-container .bouncing-tail-dot-segment');
+
+                    dotElements.forEach((segment, index) => {
+                        if (bouncingTailDotPositions[index]) {
+                            const pos = bouncingTailDotPositions[index];
+                            const segmentSize = 15 - (index * 3); /* Decrease size for tail, main dot is index 0 */
+                            segment.style.width = `${segmentSize}px`;
+                            segment.style.height = `${segmentSize}px`;
+                            segment.style.left = `calc(${pos.x}% - ${segmentSize / 2}px)`;
+                            segment.style.top = `calc(${pos.y}% - ${segmentSize / 2}px)`;
+                            segment.style.opacity = 1 - (index * 0.2); /* Fade out tail dots */
+                            segment.style.display = 'block';
+                        } else {
+                            segment.style.display = 'none'; /* Hide if no history for this tail dot (e.g., at start) */
+                        }
+                    });
+                } else if (selectedSecondHandStyle === 'comet') {
+                    cometSecondHand.style.display = 'block';
+                    const radius = 45; /* Radius for positioning */
+                    const centerX = 50; /* Percentage for center of clock-circle */
+                    const centerY = 50;
+                    const secondAngle = (parseInt(seconds) / 60) * 360; /* Angle in degrees */
+
+                    /* Position the center of the comet element's head on the circle's path */
+                    /* The transform-origin is 0% 50%, so we position the element's top-left corner */
+                    /* such that its origin is at the desired point on the circle. */
+                    const cometWidth = 100; /* Matches CSS width */
+                    const cometHeight = 10; /* Matches CSS height */
+
+                    const angleRad = secondAngle * Math.PI / 180;
+                    const headX = centerX + radius * Math.sin(angleRad);
+                    const headY = centerY - radius * Math.cos(angleRad);
+
+                    /* Adjust for the comet's own dimensions and its transform-origin */
+                    /* The 'left' position needs to be `headX` (center of clock) - `radius` (distance to head) */
+                    /* The 'top' position needs to be `headY` (center of clock) - `half of comet's height` */
+                    cometSecondHand.style.left = `calc(${headX}% - ${cometWidth * (0/100)}px)`; /* 0% origin, so no X offset from headX */
+                    cometSecondHand.style.top = `calc(${headY}% - ${cometHeight / 2}px)`; /* Half of height for vertical centering */
+
+                    /* Rotate the comet so its tail trails behind. */
+                    /* Adding 90 degrees aligns the element's horizontal axis with the tangent of the circle. */
+                    cometSecondHand.style.transform = `rotate(${secondAngle + 90}deg)`;
+                }
+            }
+
+            function applyColorScheme(schemeName) {
+                const scheme = colorSchemes[schemeName];
+                if (scheme) {
+                    for (const [prop, value] of Object.entries(scheme)) {
+                        root.style.setProperty(prop, value);
+                    }
+                }
+            }
+
+            function applyBackgroundTheme(themeName) {
+                const theme = backgroundThemes[themeName];
+                if (theme) {
+                    for (const [prop, value] of Object.entries(theme)) {
+                        root.style.setProperty(prop, value);
+                    }
+                }
+            }
+
+            // New function to apply overall themes
+            function applyOverallTheme(themeName) {
+                const theme = overallThemes[themeName];
+                if (theme) {
+                    // Remove any existing body classes related to themes
+                    document.body.classList.remove('digital-matrix-white-theme');
+
+                    for (const [prop, value] of Object.entries(theme)) {
+                        if (prop === 'body-class') {
+                            if (value) {
+                                document.body.classList.add(value);
+                            }
+                        } else if (prop.startsWith('--')) {
+                            root.style.setProperty(prop, value);
+                        } else if (prop === '--clock-font-family') {
+                            root.style.setProperty(prop, value);
+                            clockFontSelect.value = Object.keys(fontFamilies).find(key => fontFamilies[key] === value) || 'sf-mono';
+                        }
+                    }
+                    // Since overall theme sets everything, reset individual selectors to reflect the new state
+                    // or to a neutral option if no direct match exists.
+                    // For simplicity, we'll just ensure the values are set, but the dropdowns won't necessarily
+                    // show the exact 'name' of the sub-theme if it's a custom combination.
+                    // The main goal is that the *styles* are applied.
+                }
+            }
+
+
+            function applyClockFont(fontName) {
+                const font = fontFamilies[fontName];
+                if (font) {
+                    root.style.setProperty('--clock-font-family', font);
+                }
+            }
+
+            /* Event listeners */
+            layoutScaleSlider.addEventListener('input', (event) => {
+                const layoutScale = parseFloat(event.target.value);
+                root.style.setProperty('--layout-scale-factor', layoutScale);
+                /* No need to re-apply font-scale-factor here, it's independent */
+            });
+
+            fontScaleSlider.addEventListener('input', (event) => {
+                const fontScale = parseFloat(event.target.value);
+                root.style.setProperty('--font-scale-factor', fontScale);
+            });
+
+            dateFontSizeSlider.addEventListener('input', (event) => {
+                const dateFontScale = parseFloat(event.target.value);
+                root.style.setProperty('--date-font-scale-factor', dateFontScale);
+            });
+
+            dateVerticalPositionSlider.addEventListener('input', (event) => {
+                const topPosition = parseFloat(event.target.value);
+                root.style.setProperty('--date-top-position', `${topPosition}%`);
+            });
+
+            dateHorizontalPositionSlider.addEventListener('input', (event) => {
+                const leftPosition = parseFloat(event.target.value);
+                root.style.setProperty('--date-left-position', `${leftPosition}%`);
+            });
+
+            /* ON AIR Indicator Position & Size Sliders Event Listeners */
+            onAirTopPositionSlider.addEventListener('input', (event) => {
+                const topPosition = parseFloat(event.target.value);
+                root.style.setProperty('--on-air-top-position', `${topPosition}%`);
+            });
+            onAirLeftPositionSlider.addEventListener('input', (event) => {
+                const leftPosition = parseFloat(event.target.value);
+                root.style.setProperty('--on-air-left-position', `${leftPosition}%`);
+            });
+            onAirWidthSlider.addEventListener('input', (event) => {
+                const width = event.target.value === 'auto' ? 'auto' : `${parseFloat(event.target.value)}vw`;
+                root.style.setProperty('--on-air-width', width);
+            });
+            onAirFontSizeSlider.addEventListener('input', (event) => {
+                const fontSize = parseFloat(event.target.value);
+                root.style.setProperty('--on-air-font-size', `${fontSize}vw`);
+            });
+            onAirStyleSelect.addEventListener('change', (event) => {
+                // Remove all style classes first
+                onAirIndicator.classList.remove('style-pill', 'style-rectangle', 'style-circle', 'style-text-only');
+                // Add the selected style class
+                onAirIndicator.classList.add(`style-${event.target.value}`);
+            });
+
+
+            settingsButton.addEventListener('click', () => {
+                if (controlsDiv.style.opacity === '0' || controlsDiv.style.opacity === '') {
+                    controlsDiv.style.opacity = '1';
+                    controlsDiv.style.visibility = 'visible';
+                } else {
+                    controlsDiv.style.opacity = '0';
+                    controlsDiv.style.visibility = 'hidden';
+                }
+            });
+
+            fullscreenButton.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().then(() => {
+                        document.body.classList.add('fullscreen-mode');
+                        /* Change icon to minimize */
+                        fullscreenIcon.innerHTML = `<path d="M8 3v2a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>`;
+                        fullscreenIcon.classList.remove('lucide-maximize');
+                        fullscreenIcon.classList.add('lucide-minimize');
+                    }).catch(err => {
+                        console.error(`Error attempting to enable fullscreen: ${err.message} (${err.name})`);
+                    });
+                } else {
+                    document.exitFullscreen().then(() => {
+                        document.body.classList.remove('fullscreen-mode');
+                        /* Change icon to maximize */
+                        fullscreenIcon.innerHTML = `<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16h3a2 2 0 0 1 2 2v3"/>`;
+                        fullscreenIcon.classList.remove('lucide-minimize');
+                        fullscreenIcon.classList.add('lucide-maximize');
+                    }).catch(err => {
+                        console.error(`Error attempting to exit fullscreen: ${err.message} (${err.name})`);
+                    });
+                }
+            });
+
+            /* Listen for fullscreen change events to ensure UI updates even if exited by ESC key */
+            document.addEventListener('fullscreenchange', () => {
+                if (document.fullscreenElement) {
+                    document.body.classList.add('fullscreen-mode');
+                    /* Ensure icon is minimize */
+                    fullscreenIcon.innerHTML = `<path d="M8 3v2a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>`;
+                    fullscreenIcon.classList.remove('lucide-maximize');
+                    fullscreenIcon.classList.add('lucide-minimize');
+                } else {
+                    document.body.classList.remove('fullscreen-mode');
+                    /* Ensure icon is maximize */
+                    fullscreenIcon.innerHTML = `<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16h3a2 2 0 0 1 2 2v3"/>`;
+                    fullscreenIcon.classList.remove('lucide-minimize');
+                    fullscreenIcon.classList.add('lucide-maximize');
+                }
+            });
+
+            colorSchemeSelect.addEventListener('change', (event) => {
+                applyColorScheme(event.target.value);
+            });
+
+            backgroundThemeSelect.addEventListener('change', (event) => {
+                applyBackgroundTheme(event.target.value);
+            });
+
+            overallThemeSelect.addEventListener('change', (event) => {
+                applyOverallTheme(event.target.value);
+            });
+
+            clockFontSelect.addEventListener('change', (event) => {
+                applyClockFont(event.target.value);
+            });
+
+            dateFormatSelect.addEventListener('change', updateClock);
+            timeZoneSelect.addEventListener('change', updateClock);
+            onAirToggle.addEventListener('change', updateClock);
+            progressBarSelect.addEventListener('change', updateClock); /* Update on progress bar type change */
+            
+            /* Event listener for second hand style select */
+            secondHandStyleSelect.addEventListener('change', (event) => {
+                /* Reset bouncing tail dot history when style changes */
+                bouncingTailDotPositions = [];
+                updateClock();
+            });
+
+            /* Event listener for grid pattern toggle */
+            gridPatternToggle.addEventListener('change', (event) => {
+                if (event.target.checked) {
+                    gridPattern.classList.remove('hidden');
+                } else {
+                    gridPattern.classList.add('hidden');
+                }
+            });
+
+            /* Event listener for main panel toggle */
+            mainPanelToggle.addEventListener('change', (event) => {
+                if (event.target.checked) {
+                    mainPanel.classList.remove('transparent-frame');
+                } else {
+                    mainPanel.classList.add('transparent-frame');
+                }
+            });
+
+
+            /* Schedule Modal Event Listeners */
+            openScheduleModalBtn.addEventListener('click', () => {
+                scheduleModal.classList.remove('hidden');
+                renderSchedule();
+            });
+
+            closeScheduleModalBtn.addEventListener('click', () => {
+                scheduleModal.classList.add('hidden');
+                clearNewEventForm(); /* Clear form when closing modal */
+            });
+
+            onAirScheduleToggle.addEventListener('change', updateClock);
+            addUpdateScheduleEventBtn.addEventListener('click', addUpdateScheduleEntry);
+            cancelEditScheduleEventBtn.addEventListener('click', clearNewEventForm);
+
+
+            newEventDayCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', updateClock);
+            });
+
+            /* Initial calls and set interval for updates */
+            /* Apply default settings on load */
+            overallThemeSelect.value = 'digital-matrix-green'; // Set a default overall theme
+            applyOverallTheme('digital-matrix-green'); // Apply the default overall theme
+
+            // The individual selectors for Color Scheme and Background Theme are now secondary.
+            // They will reflect the values set by the overall theme, or can be used to fine-tune.
+            // We don't need to explicitly set them here as applyOverallTheme handles it.
+            
+            clockFontSelect.value = 'sf-mono';
+            applyClockFont('sf-mono');
+            dateFormatSelect.value = 'short-dmy';
+            timeZoneSelect.value = 'Europe/Warsaw';
+            progressBarSelect.value = 'minute-bar'; /* Set default progress bar to Minute Bar */
+            secondHandStyleSelect.value = 'analog-hand'; /* Set default second hand style */
+            gridPatternToggle.checked = true; /* Ensure grid pattern is enabled by default */
+            mainPanelToggle.checked = true; /* Ensure main panel is enabled by default */
+            onAirStyleSelect.value = 'pill'; // Set default ON AIR style to pill
+            onAirIndicator.classList.add('style-pill'); // Apply default ON AIR style class
+
+            // Set default value for onAirWidthSlider to 'auto'
+            onAirWidthSlider.value = 'auto'; // Set the slider value to 'auto'
+            root.style.setProperty('--on-air-width', 'auto'); // Ensure CSS variable is 'auto'
+
+            // Set default value for dateFontSizeSlider
+            dateFontSizeSlider.value = 1.0;
+            root.style.setProperty('--date-font-scale-factor', 1.0);
+
+
+            updateClock();
+            setInterval(updateClock, 1000);
+        });
+    </script>
+</body>
+</html>
